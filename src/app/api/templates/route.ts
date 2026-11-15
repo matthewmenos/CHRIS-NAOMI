@@ -5,6 +5,9 @@ import { getDb } from "@/lib/db";
 export async function GET() {
   const staff = await getSession();
   if (!staff) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (staff.role !== "admin") {
+    return NextResponse.json({ error: "Only an admin can view the SMS template." }, { status: 403 });
+  }
   const db = getDb();
   const templates = await db`
     SELECT id, name, body, updated_at FROM sms_templates

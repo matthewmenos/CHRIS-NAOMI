@@ -90,6 +90,12 @@ a { color: inherit; text-decoration: none; }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .date-chip { padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; color: #717981; background: white; font-size: 10px; }
 .dashboard-content { max-width: 1250px; margin: 0 auto; }
+.usher-dashboard .main-panel { display: flex; flex-direction: column; }
+.usher-entry-panel { max-width: 560px; margin: 0 auto; }
+.usher-entry-form { display: grid; gap: 16px; padding: 22px 20px; }
+.usher-entry-form .field label { color: #48515a; }
+.usher-entry-form .sms-consent-note { margin: 0; }
+.usher-submit { justify-self: start; min-width: 220px; }
 .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 19px; }
 .stat-card { min-height: 114px; padding: 17px 18px; border: 1px solid #e9ebee; border-radius: 8px; background: white; }
 .stat-head { display: flex; justify-content: space-between; color: #7d858d; font-size: 11px; }
@@ -343,6 +349,8 @@ td strong { color: var(--ink); font-size: 11px; }
   .login-card { padding: 30px 24px; }
   .program-editor { padding: 15px; }
   .program-editor-footer { align-items: flex-end; }
+  .usher-entry-form { padding: 17px 15px; }
+  .usher-submit { width: 100%; }
   .program-page { padding: 13px 15px 35px; }
   .program-topbar { margin-bottom: 12px; }
   .program-spread { width: min(100%, 530px); grid-template-columns: 1fr; gap: 17px; }

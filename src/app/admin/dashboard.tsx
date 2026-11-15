@@ -63,6 +63,7 @@ export default function Dashboard() {
   const [usher, setUsher] = useState({ name: "", email: "", password: "" });
   const [showUsherPassword, setShowUsherPassword] = useState(false);
   const [program, setProgram] = useState<WeddingProgram>(DEFAULT_WEDDING_PROGRAM);
+  const [attendeeForm, setAttendeeForm] = useState({ name: "", phone: "", guestCount: "1" });
 
   const loadAttendees = useCallback(async () => {
     const result = await getJson<{ attendees: Attendee[] }>("/api/attendees");
@@ -91,10 +92,9 @@ export default function Dashboard() {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (staff?.role !== "admin") return;
     await loadAttendees();
-    if (staff?.role === "admin") {
-      await Promise.all([loadTemplate(), loadTeam(), loadEventDate(), loadProgram()]);
-    }
+    await Promise.all([loadTemplate(), loadTeam(), loadEventDate(), loadProgram()]);
   }, [loadAttendees, loadEventDate, loadProgram, loadTemplate, loadTeam, staff?.role]);
 
   useEffect(() => {
@@ -113,8 +113,12 @@ export default function Dashboard() {
         if (!result || !active) return;
         setStaff(result.staff);
         const [attendeeResult, templateResult, teamResult, settingsResult, programResult] = await Promise.all([
-          getJson<{ attendees: Attendee[] }>("/api/attendees"),
-          getJson<{ template: SmsTemplate | null }>("/api/templates"),
+          result.staff.role === "admin"
+            ? getJson<{ attendees: Attendee[] }>("/api/attendees")
+            : Promise.resolve({ attendees: [] as Attendee[] }),
+          result.staff.role === "admin"
+            ? getJson<{ template: SmsTemplate | null }>("/api/templates")
+            : Promise.resolve({ template: null as SmsTemplate | null }),
           result.staff.role === "admin"
             ? getJson<{ team: TeamMember[] }>("/api/staff")
             : Promise.resolve({ team: [] as TeamMember[] }),
@@ -155,6 +159,34 @@ export default function Dashboard() {
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.replace("/admin/login");
+  }
+
+  async function registerAttendee(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/attendees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: attendeeForm.name,
+          phone: attendeeForm.phone,
+          guestCount: Number(attendeeForm.guestCount),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Couldn't save the attendee.");
+      if (result.saved) setAttendeeForm({ name: "", phone: "", guestCount: "1" });
+      setNotice({
+        type: result.smsStatus === "failed" || result.alreadyRegistered ? "error" : "success",
+        text: result.message,
+      });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Couldn't save the attendee." });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function sendMessages() {
@@ -374,6 +406,87 @@ export default function Dashboard() {
 
   if (loading) return <main className="login-shell"><div style={{ color: "white", fontSize: 13 }}>Loading your dashboard…</div></main>;
   if (!staff) return null;
+  if (staff.role === "usher") {
+    return (
+      <main className="dashboard-shell usher-dashboard">
+        <aside className="sidebar">
+          <div className="side-brand">
+            <span>Wedding celebration</span>
+            <strong>Chris &amp; Naomi</strong>
+          </div>
+          <div className="side-label">Usher workspace</div>
+          <div className="sidebar-bottom">
+            <div className="staff-identity">
+              <div className="avatar">{staff.name.slice(0, 1).toUpperCase()}</div>
+              <div><strong>{staff.name}</strong><span>Usher</span></div>
+            </div>
+            <button className="signout" onClick={logout} type="button"><LogOut size={13} /> Sign out</button>
+          </div>
+        </aside>
+        <section className="main-panel">
+          <header className="topbar">
+            <div>
+              <div className="eyebrow">Usher workspace</div>
+              <h1 className="serif">Add attendee</h1>
+            </div>
+          </header>
+          <div className="dashboard-content">
+            {notice && <div className={`inline-alert ${notice.type}`} role="status">{notice.type === "error" ? <CircleAlert size={14} style={{ verticalAlign: "middle", marginRight: 7 }} /> : <Check size={14} style={{ verticalAlign: "middle", marginRight: 7 }} />}{notice.text}</div>}
+            <section className="panel usher-entry-panel">
+              <div className="panel-head">
+                <div>
+                  <h2>Register a guest</h2>
+                  <p>Save their details and send the wedding program by SMS automatically.</p>
+                </div>
+              </div>
+              <form className="usher-entry-form" onSubmit={registerAttendee}>
+                <div className="field">
+                  <label htmlFor="usher-guest-name">Guest full name</label>
+                  <input
+                    autoComplete="name"
+                    id="usher-guest-name"
+                    maxLength={120}
+                    onChange={(event) => setAttendeeForm({ ...attendeeForm, name: event.target.value })}
+                    required
+                    value={attendeeForm.name}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="usher-guest-phone">Mobile number</label>
+                  <input
+                    autoComplete="tel"
+                    id="usher-guest-phone"
+                    inputMode="tel"
+                    onChange={(event) => setAttendeeForm({ ...attendeeForm, phone: event.target.value })}
+                    placeholder="+233 24 000 0000"
+                    required
+                    value={attendeeForm.phone}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="usher-guest-count">Number of guests, including them</label>
+                  <select
+                    id="usher-guest-count"
+                    onChange={(event) => setAttendeeForm({ ...attendeeForm, guestCount: event.target.value })}
+                    value={attendeeForm.guestCount}
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((count) => (
+                      <option key={count} value={count}>{count} {count === 1 ? "guest" : "guests"}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="sms-consent-note">Confirm the guest agrees to receive the wedding program by SMS before submitting. Duplicate phone numbers won’t be added or messaged again.</p>
+                <button className="button button-primary usher-submit" disabled={busy} type="submit">
+                  {busy ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}
+                  {busy ? "Saving & sending…" : "Save & send program SMS"}
+                </button>
+              </form>
+            </section>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   const tabs: Array<{ id: Tab; label: string; icon: typeof Users; adminOnly?: boolean }> = [
     { id: "overview", label: "Overview", icon: CalendarDays },
