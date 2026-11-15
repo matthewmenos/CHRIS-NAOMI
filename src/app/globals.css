@@ -345,9 +345,15 @@ td strong { color: var(--ink); font-size: 11px; }
   .side-brand { display: flex; align-items: center; justify-content: space-between; padding: 2px 5px 11px; }
   .side-brand strong { margin: 0; font-size: 17px; }
   .side-brand span { display: none; }
-  .side-label, .sidebar-bottom { display: none; }
+  .side-label { display: none; }
   .side-nav { display: flex; gap: 4px; padding-top: 10px; overflow-x: auto; }
   .side-nav button { flex: 0 0 auto; gap: 7px; padding: 9px 10px; font-size: 10px; }
+  .sidebar-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 11px; padding: 10px 5px 0; border-top: 1px solid #ffffff1a; }
+  .staff-identity { min-width: 0; margin-bottom: 0; }
+  .staff-identity > div:last-child { min-width: 0; }
+  .staff-identity strong { overflow: hidden; max-width: 180px; text-overflow: ellipsis; white-space: nowrap; }
+  .signout { flex: 0 0 auto; justify-content: center; min-height: 36px; border: 1px solid #ffffff38; border-radius: 6px; padding: 0 12px; color: white; background: #ffffff0b; }
+  .signout:hover { border-color: #d7bc98; color: #f2c77f; background: #ffffff15; }
   .main-panel { padding: 22px 15px 40px; }
   .topbar { align-items: flex-start; margin-bottom: 21px; }
   .topbar h1 { font-size: 22px; }
