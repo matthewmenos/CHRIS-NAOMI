@@ -15,7 +15,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let body: { name?: string; phone?: string; guestCount?: number; smsConsent?: boolean };
+  let body: { name?: string; phone?: string; guestCount?: number };
   try {
     body = await request.json();
   } catch {
@@ -37,10 +37,6 @@ export async function POST(request: Request) {
   if (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > 10) {
     return NextResponse.json({ error: "Guest count must be between 1 and 10." }, { status: 400 });
   }
-  if (body.smsConsent !== true) {
-    return NextResponse.json({ error: "Please agree to receive the wedding program by SMS." }, { status: 400 });
-  }
-
   const db = getDb();
   const inserted = await db`
     INSERT INTO attendees (name, phone, guest_count, sms_consent)

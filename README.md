@@ -23,18 +23,20 @@ A wedding RSVP and SMS app built with Next.js, TypeScript, Neon Postgres, and mN
    ```
 
    The script creates the account if it doesn't exist, or updates its password if it does.
-5. Start the app with `npm run dev`. RSVP is at `/`; staff sign in at `/admin/login`.
+5. Start the app with `npm run dev`. Welcome is at `/`, RSVP at `/rsvp`, the wedding program at `/program`, and staff sign in at `/admin/login`.
 
 ## Features
 
-- Public RSVP form with name, phone, guest count, and SMS consent.
+- Public RSVP form with name, phone, guest count, and clear SMS consent disclosure.
+- A separate, styled public wedding program page editable by admins from the dashboard. The outline starts with the ceremony details shown on the invitation and can be extended with up to 30 timed events.
+- A non-scrolling wedding welcome page with a live days/hours/minutes/seconds countdown. Admins can update the event date and time in the dashboard; the invitation defaults to 21 November 2026 at 10:00 AM Ghana time.
 - Attendee records stored in Neon and queued for an admin to review and send the program SMS (avoids sending paid messages directly from a public form).
 - Staff sign-in with admin and usher roles. Admins can create usher accounts.
 - Admins can edit the program SMS template, send it to pending/failed RSVPs, or resend an updated program to all saved guests.
 - SMS credentials and all provider requests stay on the server.
 
-Templates support `{name}` and `{guests}` placeholders. Add the actual ceremony and reception details to the template before sending; the wedding date and venue have not been supplied yet. Phone numbers are stored as supplied after whitespace removal; mNotify receives the digits only. The quick-SMS endpoint follows mNotify's supported-country limits; international recipients may require an approved international template. Check that the sender ID and message content are approved for your account before sending real messages.
+Templates support `{name}` and `{guests}` placeholders. Add the actual ceremony and reception details to the template before sending. Phone numbers are stored as supplied after whitespace removal; mNotify receives the digits only. The quick-SMS endpoint follows mNotify's supported-country limits; international recipients may require an approved international template. Check that the sender ID and message content are approved for your account before sending real messages.
 
 ## Deploy to Vercel
 
-Push this repository to GitHub, import it into Vercel, and add the environment variables from `.env.example` in the project settings. With your production `DATABASE_URL`, run `npm run db:deploy` and `npm run seed:admin` locally. Never commit `.env.local` or share provider credentials.
+Push this repository to GitHub, import it into Vercel, and add the environment variables from `.env.example` in the project settings. With your production `DATABASE_URL`, run `npm run db:deploy` and `npm run seed:admin` locally. Re-run `npm run db:deploy` after pulling schema changes for the countdown settings or wedding program. Never commit `.env.local` or share provider credentials.

@@ -4,6 +4,8 @@ import {
   CalendarDays,
   Check,
   CircleAlert,
+  Eye,
+  EyeOff,
   FileText,
   LogOut,
   MessageSquareText,
@@ -14,10 +16,15 @@ import {
   Shield,
   Users,
   UserRoundPlus,
+  Clock3,
+  ListOrdered,
+  Trash2,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StaffSession } from "@/lib/auth";
+import { DEFAULT_EVENT_AT, fromEventDateInput, toEventDateInput } from "@/lib/event-time";
+import { DEFAULT_WEDDING_PROGRAM, type ProgramItem, type WeddingProgram } from "@/lib/program";
 
 type Attendee = {
   id: string;
@@ -31,7 +38,7 @@ type Attendee = {
 };
 type SmsTemplate = { id: string; name: string; body: string };
 type TeamMember = { id: string; name: string; email: string; role: "admin" | "usher"; created_at: string };
-type Tab = "overview" | "attendees" | "template" | "team";
+type Tab = "overview" | "attendees" | "template" | "team" | "event" | "program";
 
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
@@ -52,7 +59,10 @@ export default function Dashboard() {
   const [notice, setNotice] = useState<{ type: "error" | "success"; text: string } | null>(null);
   const [templateName, setTemplateName] = useState("");
   const [templateBody, setTemplateBody] = useState("");
+  const [eventDate, setEventDate] = useState(toEventDateInput(DEFAULT_EVENT_AT));
   const [usher, setUsher] = useState({ name: "", email: "", password: "" });
+  const [showUsherPassword, setShowUsherPassword] = useState(false);
+  const [program, setProgram] = useState<WeddingProgram>(DEFAULT_WEDDING_PROGRAM);
 
   const loadAttendees = useCallback(async () => {
     const result = await getJson<{ attendees: Attendee[] }>("/api/attendees");
@@ -70,10 +80,22 @@ export default function Dashboard() {
     setTeam(result.team);
   }, []);
 
+  const loadEventDate = useCallback(async () => {
+    const result = await getJson<{ eventAt: string }>("/api/settings");
+    setEventDate(toEventDateInput(result.eventAt));
+  }, []);
+
+  const loadProgram = useCallback(async () => {
+    const result = await getJson<{ program: WeddingProgram }>("/api/program");
+    setProgram(result.program);
+  }, []);
+
   const refresh = useCallback(async () => {
     await loadAttendees();
-    if (staff?.role === "admin") await Promise.all([loadTemplate(), loadTeam()]);
-  }, [loadAttendees, loadTemplate, loadTeam, staff?.role]);
+    if (staff?.role === "admin") {
+      await Promise.all([loadTemplate(), loadTeam(), loadEventDate(), loadProgram()]);
+    }
+  }, [loadAttendees, loadEventDate, loadProgram, loadTemplate, loadTeam, staff?.role]);
 
   useEffect(() => {
     let active = true;
@@ -90,18 +112,24 @@ export default function Dashboard() {
       .then(async (result) => {
         if (!result || !active) return;
         setStaff(result.staff);
-        const [attendeeResult, templateResult, teamResult] = await Promise.all([
+        const [attendeeResult, templateResult, teamResult, settingsResult, programResult] = await Promise.all([
           getJson<{ attendees: Attendee[] }>("/api/attendees"),
           getJson<{ template: SmsTemplate | null }>("/api/templates"),
           result.staff.role === "admin"
             ? getJson<{ team: TeamMember[] }>("/api/staff")
             : Promise.resolve({ team: [] as TeamMember[] }),
+          result.staff.role === "admin"
+            ? getJson<{ eventAt: string }>("/api/settings")
+            : Promise.resolve({ eventAt: DEFAULT_EVENT_AT }),
+          getJson<{ program: WeddingProgram }>("/api/program"),
         ]);
         if (!active) return;
         setAttendees(attendeeResult.attendees);
         setTemplateName(templateResult.template?.name ?? "Wedding program");
         setTemplateBody(templateResult.template?.body ?? "");
         setTeam(teamResult.team);
+        setEventDate(toEventDateInput(settingsResult.eventAt));
+        setProgram(programResult.program);
       })
       .catch((error: unknown) => {
         if (active) {
@@ -219,6 +247,67 @@ export default function Dashboard() {
     }
   }
 
+  async function saveEventDate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const eventAt = fromEventDateInput(eventDate);
+    if (!eventAt) {
+      setNotice({ type: "error", text: "Choose a valid wedding date and time." });
+      return;
+    }
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventAt }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Couldn't save the wedding date.");
+      setEventDate(toEventDateInput(result.eventAt));
+      setNotice({ type: "success", text: "Wedding date and time saved." });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Couldn't save the wedding date." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveProgram(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/program", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(program),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Couldn't save the program.");
+      setProgram(result.program);
+      setNotice({ type: "success", text: "Wedding day program saved." });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Couldn't save the program." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function updateProgramItem(id: string, field: keyof Omit<ProgramItem, "id">, value: string) {
+    setProgram((current) => ({
+      ...current,
+      items: current.items.map((item) => item.id === id ? { ...item, [field]: value } : item),
+    }));
+  }
+
+  function addProgramItem() {
+    setProgram((current) => ({
+      ...current,
+      items: [...current.items, { id: crypto.randomUUID(), time: "", title: "", description: "" }],
+    }));
+  }
+
   async function createUsher(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -253,6 +342,8 @@ export default function Dashboard() {
     { id: "attendees", label: "Attendees", icon: Users },
     { id: "template", label: "SMS template", icon: MessageSquareText, adminOnly: true },
     { id: "team", label: "Usher accounts", icon: Shield, adminOnly: true },
+    { id: "event", label: "Event date", icon: Clock3, adminOnly: true },
+    { id: "program", label: "Program outline", icon: ListOrdered, adminOnly: true },
   ];
   const title = tabs.find((item) => item.id === tab)?.label ?? "Overview";
 
@@ -287,7 +378,7 @@ export default function Dashboard() {
             <h1 className="serif">{title}</h1>
           </div>
           <div className="topbar-right">
-            <div className="date-chip"><CalendarDays size={12} style={{ verticalAlign: "middle", marginRight: 6 }} />Wedding celebration</div>
+            <div className="date-chip"><CalendarDays size={12} style={{ verticalAlign: "middle", marginRight: 6 }} />{new Date(`${eventDate}:00+00:00`).toLocaleString("en", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" })}</div>
             <button className="button button-outline" onClick={() => {
               setNotice(null);
               void refresh().catch((error: unknown) => setNotice({
@@ -362,6 +453,93 @@ export default function Dashboard() {
             </section>
           )}
 
+          {tab === "event" && staff.role === "admin" && (
+            <section className="panel event-date-panel">
+              <div className="panel-head">
+                <div>
+                  <h2>Wedding date and time</h2>
+                  <p>This controls the public countdown. Time is shown in Ghana time (GMT).</p>
+                </div>
+                <span className="status-pill status-sent"><Clock3 size={11} style={{ marginRight: 5 }} />Public countdown</span>
+              </div>
+              <form className="event-date-form" onSubmit={saveEventDate}>
+                <div className="field">
+                  <label htmlFor="event-date">Wedding date and time · Ghana time</label>
+                  <input
+                    id="event-date"
+                    onChange={(event) => setEventDate(event.target.value)}
+                    required
+                    type="datetime-local"
+                    value={eventDate}
+                  />
+                </div>
+                <p>The countdown updates automatically on the welcome page. The current invitation date is Saturday, 21 November 2026 at 10:00 AM.</p>
+                <button className="button button-primary" disabled={busy} type="submit">
+                  {busy ? <RefreshCw size={14} /> : <Check size={14} />}
+                  {busy ? "Saving…" : "Save wedding date"}
+                </button>
+              </form>
+            </section>
+          )}
+
+          {tab === "program" && staff.role === "admin" && (
+            <section className="panel program-editor-panel">
+              <div className="panel-head">
+                <div>
+                  <h2>Wedding day program</h2>
+                  <p>Edit the schedule guests can view on the public program page.</p>
+                </div>
+                <a className="button button-outline" href="/program" rel="noreferrer" target="_blank">Preview public page</a>
+              </div>
+              <form className="program-editor" onSubmit={saveProgram}>
+                <div className="field">
+                  <label htmlFor="program-title">Page title</label>
+                  <input id="program-title" maxLength={100} onChange={(event) => setProgram({ ...program, title: event.target.value })} required value={program.title} />
+                </div>
+                <div className="field">
+                  <label htmlFor="program-subtitle">Welcome message</label>
+                  <input id="program-subtitle" maxLength={200} onChange={(event) => setProgram({ ...program, subtitle: event.target.value })} value={program.subtitle} />
+                </div>
+                <div className="program-items-heading">
+                  <div><h3>Order of events</h3><p>Entries appear in the same order as listed here.</p></div>
+                  <button className="button button-outline" disabled={program.items.length >= 30} onClick={addProgramItem} type="button"><Plus size={14} /> Add event</button>
+                </div>
+                {program.items.length === 0 && (
+                  <div className="program-empty-editor">No events yet. Add the first item to begin the outline.</div>
+                )}
+                {program.items.map((item, index) => (
+                  <fieldset className="program-item-editor" key={item.id}>
+                    <legend>Event {String(index + 1).padStart(2, "0")}</legend>
+                    <div className="program-item-fields">
+                      <div className="field">
+                        <label htmlFor={`program-time-${item.id}`}>Time</label>
+                        <input id={`program-time-${item.id}`} maxLength={40} onChange={(event) => updateProgramItem(item.id, "time", event.target.value)} placeholder="10:00 AM" required value={item.time} />
+                      </div>
+                      <div className="field">
+                        <label htmlFor={`program-name-${item.id}`}>Event</label>
+                        <input id={`program-name-${item.id}`} maxLength={100} onChange={(event) => updateProgramItem(item.id, "title", event.target.value)} placeholder="Wedding ceremony" required value={item.title} />
+                      </div>
+                      <button aria-label={`Remove event ${index + 1}`} className="program-remove" onClick={() => setProgram({ ...program, items: program.items.filter((entry) => entry.id !== item.id) })} type="button">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`program-description-${item.id}`}>Details (optional)</label>
+                      <textarea id={`program-description-${item.id}`} maxLength={500} onChange={(event) => updateProgramItem(item.id, "description", event.target.value)} placeholder="Venue, host, or a short note for guests" rows={2} value={item.description} />
+                    </div>
+                  </fieldset>
+                ))}
+                <div className="program-editor-footer">
+                  <span>{program.items.length} / 30 events</span>
+                  <button className="button button-primary" disabled={busy || program.items.length > 30} type="submit">
+                    {busy ? <RefreshCw size={14} /> : <Check size={14} />}
+                    {busy ? "Saving…" : "Save program outline"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+
           {tab === "team" && staff.role === "admin" && (
             <section className="panel">
               <div className="panel-head">
@@ -371,7 +549,15 @@ export default function Dashboard() {
               <form className="team-form" onSubmit={createUsher}>
                 <div className="field"><label htmlFor="usher-name">Full name</label><input id="usher-name" maxLength={120} onChange={(event) => setUsher({ ...usher, name: event.target.value })} required value={usher.name} /></div>
                 <div className="field"><label htmlFor="usher-email">Email</label><input id="usher-email" onChange={(event) => setUsher({ ...usher, email: event.target.value })} required type="email" value={usher.email} /></div>
-                <div className="field"><label htmlFor="usher-password">Password (12+ characters)</label><input id="usher-password" minLength={12} onChange={(event) => setUsher({ ...usher, password: event.target.value })} required type="password" value={usher.password} /></div>
+                <div className="field">
+                  <label htmlFor="usher-password">Password (12+ characters)</label>
+                  <div className="password-input-wrap">
+                    <input id="usher-password" minLength={12} onChange={(event) => setUsher({ ...usher, password: event.target.value })} required type={showUsherPassword ? "text" : "password"} value={usher.password} />
+                    <button aria-label={showUsherPassword ? "Hide password" : "Show password"} className="password-toggle" onClick={() => setShowUsherPassword(!showUsherPassword)} type="button">
+                      {showUsherPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
                 <button className="button button-primary" disabled={busy} type="submit"><Plus size={14} /> Add usher</button>
               </form>
               <div className="table-wrap">

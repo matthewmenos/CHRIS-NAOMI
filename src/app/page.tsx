@@ -1,125 +1,118 @@
 "use client";
 
-import { ArrowRight, Check, Heart, LoaderCircle } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { useEffect, useState } from "react";
+import background from "@/assets/background.jpg";
+import { DEFAULT_EVENT_AT, EVENT_TIME_ZONE } from "@/lib/event-time";
 
-export default function RSVPPage() {
-  const [form, setForm] = useState({ name: "", phone: "", guestCount: "1", smsConsent: false });
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<{ type: "error" | "success"; text: string } | null>(null);
+type Countdown = { days: number; hours: number; minutes: number; seconds: number };
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setNotice(null);
-    try {
-      const response = await fetch("/api/attendees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          phone: form.phone,
-          guestCount: Number(form.guestCount),
-          smsConsent: form.smsConsent,
-        }),
+function getCountdown(target: number, now: number): Countdown {
+  const totalSeconds = Math.max(0, Math.floor((target - now) / 1000));
+  return {
+    days: Math.floor(totalSeconds / 86_400),
+    hours: Math.floor((totalSeconds % 86_400) / 3_600),
+    minutes: Math.floor((totalSeconds % 3_600) / 60),
+    seconds: totalSeconds % 60,
+  };
+}
+
+function CountdownUnit({ value, label }: { value: number | null; label: string }) {
+  const display = value === null ? "--" : String(value).padStart(2, "0");
+  return (
+    <div className="countdown-unit">
+      <span className="countdown-number" key={`${label}-${display}`}>{display}</span>
+      <span className="countdown-label">{label}</span>
+    </div>
+  );
+}
+
+export default function WelcomePage() {
+  const [eventAt, setEventAt] = useState(DEFAULT_EVENT_AT);
+  const [now, setNow] = useState<number | null>(null);
+  const [settingsUnavailable, setSettingsUnavailable] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/settings")
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Couldn't load the wedding date.");
+        return result as { eventAt?: string };
+      })
+      .then((result) => {
+        const timestamp = result.eventAt ? Date.parse(result.eventAt) : Number.NaN;
+        if (!Number.isFinite(timestamp)) throw new Error("The saved wedding date is invalid.");
+        if (active) setEventAt(new Date(timestamp).toISOString());
+      })
+      .catch(() => {
+        if (active) setSettingsUnavailable(true);
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "We couldn't save your RSVP.");
-      setNotice({ type: "success", text: result.message });
-      if (!result.alreadyRegistered) {
-        setForm({ name: "", phone: "", guestCount: "1", smsConsent: false });
-      }
-    } catch (error) {
-      setNotice({
-        type: "error",
-        text: error instanceof Error ? error.message : "Something went wrong. Please try again.",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const updateTime = () => setNow(Date.now());
+    updateTime();
+    const timer = window.setInterval(updateTime, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const target = new Date(eventAt).getTime();
+  const countdown = now === null ? null : getCountdown(target, now);
+  const dateLabel = new Intl.DateTimeFormat("en", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: EVENT_TIME_ZONE,
+  }).format(new Date(eventAt));
+  const timeLabel = new Intl.DateTimeFormat("en", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: EVENT_TIME_ZONE,
+  }).format(new Date(eventAt));
+  const celebrationStarted = now !== null && now >= target;
 
   return (
-    <main className="invite-page">
-      <section className="invite-visual">
-        <div className="brand-mark">C <span style={{ color: "#d7bc98" }}>&</span> N</div>
-        <div className="invite-copy">
-          <div className="eyebrow">Together with our families</div>
-          <h1 className="serif">Chris <span>& Naomi</span></h1>
-          <p>Two hearts, one beautiful beginning. We would be honored to have you with us as we celebrate our wedding day.</p>
-          <div className="invite-date">THE WEDDING CELEBRATION · DETAILS TO FOLLOW</div>
-        </div>
-        <div className="visual-foot">
-          <span>A day to remember</span>
-          <span>With love, C & N</span>
-        </div>
-      </section>
-
-      <section className="invite-form-wrap">
-        <div className="invite-form">
-          <div className="eyebrow">You are warmly invited</div>
-          <h2 className="serif">Kindly RSVP</h2>
-          <p>Please let us know if you can join us. We’ll send the day’s program to your phone so you don’t miss a moment.</p>
-          <form className="form-stack" onSubmit={submit}>
-            <div className="field">
-              <label htmlFor="guest-name">Your full name</label>
-              <input
-                autoComplete="name"
-                id="guest-name"
-                maxLength={120}
-                onChange={(event) => setForm({ ...form, name: event.target.value })}
-                placeholder="e.g. Ama Mensah"
-                required
-                value={form.name}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="guest-phone">Mobile number</label>
-              <input
-                autoComplete="tel"
-                id="guest-phone"
-                inputMode="tel"
-                onChange={(event) => setForm({ ...form, phone: event.target.value })}
-                placeholder="+233 24 000 0000"
-                required
-                value={form.phone}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="guest-count">Number of guests, including you</label>
-              <select
-                id="guest-count"
-                onChange={(event) => setForm({ ...form, guestCount: event.target.value })}
-                value={form.guestCount}
-              >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((count) => (
-                  <option key={count} value={count}>{count} {count === 1 ? "guest" : "guests"}</option>
-                ))}
-              </select>
-            </div>
-            <label className="consent">
-              <input
-                checked={form.smsConsent}
-                onChange={(event) => setForm({ ...form, smsConsent: event.target.checked })}
-                required
-                type="checkbox"
-              />
-              <span>I agree to receive the wedding program and event updates by SMS. My number will be kept for wedding communications.</span>
-            </label>
-            {notice && <div className={`form-note ${notice.type}`} role="status">{notice.text}</div>}
-            <button className="button button-primary invite-submit" disabled={busy} type="submit">
-              {busy ? <LoaderCircle size={16} className="spin" /> : notice?.type === "success" ? <Check size={16} /> : <Heart size={15} />}
-              {busy ? "Saving your RSVP..." : "Confirm my RSVP"}
-              {!busy && notice?.type !== "success" && <ArrowRight size={15} />}
-            </button>
-          </form>
-          <div className="form-foot">
-            We can’t wait to celebrate with you · Chris & Naomi
-            <span style={{ display: "block", marginTop: 10 }}><Link href="/admin/login">Team sign in</Link></span>
+    <main className="welcome-screen">
+      <Image alt="" className="welcome-background" fill priority sizes="100vw" src={background} />
+      <div aria-hidden="true" className="welcome-shade" />
+      <div className="welcome-content">
+        <header className="welcome-header">
+          <div className="welcome-monogram" aria-label="Christian and Naomi">C <span>&</span> N</div>
+        </header>
+        <section className="welcome-center">
+          <p className="welcome-overline">Elder Christian Sominnah & Deaconess Naomi Cudjoe</p>
+          <h1 className="welcome-title serif">Christian <span>&</span> Naomi</h1>
+          <p className="welcome-subtitle">Together with our families, we invite you to celebrate our wedding</p>
+          <div className="welcome-event-details">
+            <p>{dateLabel} <span aria-hidden="true">·</span> {timeLabel}</p>
+            <p>The Church of Pentecost, Agona-Fie Assembly<br />Agona Nkwanta</p>
           </div>
-        </div>
-      </section>
+          <div
+            aria-label={countdown ? `${countdown.days} days, ${countdown.hours} hours, ${countdown.minutes} minutes, ${countdown.seconds} seconds remaining` : "Countdown loading"}
+            className="welcome-countdown"
+            role="timer"
+          >
+            <CountdownUnit label="Days" value={countdown?.days ?? null} />
+            <CountdownUnit label="Hours" value={countdown?.hours ?? null} />
+            <CountdownUnit label="Minutes" value={countdown?.minutes ?? null} />
+            <CountdownUnit label="Seconds" value={countdown?.seconds ?? null} />
+          </div>
+          <p className="welcome-countdown-caption">{celebrationStarted ? "Our celebration has begun" : "Counting down to our special day"}</p>
+          <div className="welcome-actions">
+            <Link className="welcome-rsvp" href="/rsvp">Kindly RSVP <span aria-hidden="true">↗</span></Link>
+            <Link className="welcome-program-link" href="/program">Wedding day program</Link>
+          </div>
+          {settingsUnavailable && <p className="welcome-settings-note">Showing the invitation date; live date settings are unavailable.</p>}
+        </section>
+        <footer className="welcome-footer">
+          <span>One day · One beginning · Forever</span>
+          <span>With love, Christian & Naomi</span>
+        </footer>
+      </div>
     </main>
   );
 }
