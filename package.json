@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:deploy": "node scripts/deploy-db.mjs",
+    "seed:admin": "node scripts/seed-admin.mjs"
   },
   "dependencies": {
+    "@next/env": "^15.5.29",
     "@neondatabase/serverless": "^1.0.2",
     "bcryptjs": "^3.0.2",
     "jose": "^6.1.0",

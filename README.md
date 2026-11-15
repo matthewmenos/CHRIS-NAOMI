@@ -10,14 +10,19 @@ A wedding RSVP and SMS app built with Next.js, TypeScript, Neon Postgres, and mN
    - `SESSION_SECRET`: a random secret of at least 32 characters.
    - `MNOTIFY_API_KEY`: API key from the BMS/mNotify developer settings.
    - `MNOTIFY_SENDER_ID`: approved sender ID (up to 11 characters).
-3. Run the SQL in [`database/schema.sql`](./database/schema.sql) in the Neon SQL Editor.
-4. Create the first admin using:
+3. Apply the database schema:
 
    ```powershell
-   node --env-file=.env.local scripts/seed-admin.mjs
+   npm run db:deploy
    ```
 
-   Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env.local` first. The script creates the account if it doesn't exist, or updates its password if it does.
+4. Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env.local`, then create the first admin:
+
+   ```powershell
+   npm run seed:admin
+   ```
+
+   The script creates the account if it doesn't exist, or updates its password if it does.
 5. Start the app with `npm run dev`. RSVP is at `/`; staff sign in at `/admin/login`.
 
 ## Features
@@ -32,4 +37,4 @@ Templates support `{name}` and `{guests}` placeholders. Add the actual ceremony 
 
 ## Deploy to Vercel
 
-Push this repository to GitHub, import it into Vercel, and add the environment variables from `.env.example` in the project settings. Run `database/schema.sql` against the production Neon database, then run the seed-admin script locally with the production `DATABASE_URL`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`. Never commit `.env.local` or share provider credentials.
+Push this repository to GitHub, import it into Vercel, and add the environment variables from `.env.example` in the project settings. With your production `DATABASE_URL`, run `npm run db:deploy` and `npm run seed:admin` locally. Never commit `.env.local` or share provider credentials.

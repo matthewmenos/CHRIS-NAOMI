@@ -1,5 +1,9 @@
 import bcrypt from "bcryptjs";
+import env from "@next/env";
 import { neon } from "@neondatabase/serverless";
+
+const { loadEnvConfig } = env;
+loadEnvConfig(process.cwd());
 
 const { DATABASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
 
