@@ -1,23 +1,59 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { DEFAULT_WEDDING_PROGRAM, type ProgramItem, type WeddingProgram } from "@/lib/program";
+import { DEFAULT_WEDDING_PROGRAM, type ProgramCredit, type ProgramItem, type WeddingProgram } from "@/lib/program";
 
 function readProgram(row: Record<string, unknown> | undefined): WeddingProgram {
   if (!row) return DEFAULT_WEDDING_PROGRAM;
-  const rawItems = row.items;
-  const items = typeof rawItems === "string" ? JSON.parse(rawItems) : rawItems;
-  if (!Array.isArray(items)) throw new Error("The saved wedding program is invalid.");
+  const readArray = (value: unknown) => {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    if (!Array.isArray(parsed)) throw new Error("The saved wedding program is invalid.");
+    return parsed;
+  };
+  const items = readArray(row.items);
+  const functionaries = readArray(row.functionaries ?? []);
+  const photography = readArray(row.photography ?? []);
   return {
     title: String(row.title),
     subtitle: String(row.subtitle),
     items: items as ProgramItem[],
+    functionaries: functionaries as ProgramCredit[],
+    photography: photography as ProgramCredit[],
   };
+}
+
+type CreditListResult =
+  | { ok: true; credits: ProgramCredit[] }
+  | { ok: false; error: string };
+
+function validateCredits(value: unknown, section: string): CreditListResult {
+  if (!Array.isArray(value) || value.length > 30) {
+    return { ok: false, error: `${section} can contain up to 30 entries.` };
+  }
+
+  const ids = new Set<string>();
+  const credits: ProgramCredit[] = [];
+  for (const rawCredit of value) {
+    if (!rawCredit || typeof rawCredit !== "object" || Array.isArray(rawCredit)) {
+      return { ok: false, error: `Each ${section.toLowerCase()} entry needs a name or role.` };
+    }
+    const credit = rawCredit as { id?: unknown; title?: unknown; description?: unknown };
+    const title = typeof credit.title === "string" ? credit.title.trim() : "";
+    const description = typeof credit.description === "string" ? credit.description.trim() : "";
+    if (!title || title.length > 120 || description.length > 500) {
+      return { ok: false, error: `Each ${section.toLowerCase()} entry needs a name or role, with details under 500 characters.` };
+    }
+    let id = typeof credit.id === "string" && credit.id.length <= 100 ? credit.id : crypto.randomUUID();
+    if (!id || ids.has(id)) id = crypto.randomUUID();
+    ids.add(id);
+    credits.push({ id, title, description });
+  }
+  return { ok: true, credits };
 }
 
 export async function GET() {
   const db = getDb();
-  const rows = await db`SELECT title, subtitle, items FROM wedding_program WHERE id = 1`;
+  const rows = await db`SELECT title, subtitle, items, functionaries, photography FROM wedding_program WHERE id = 1`;
   return NextResponse.json({ program: readProgram(rows[0] as Record<string, unknown> | undefined) });
 }
 
@@ -38,7 +74,13 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Enter a valid wedding program." }, { status: 400 });
   }
 
-  const value = body as { title?: unknown; subtitle?: unknown; items?: unknown };
+  const value = body as {
+    title?: unknown;
+    subtitle?: unknown;
+    items?: unknown;
+    functionaries?: unknown;
+    photography?: unknown;
+  };
   const title = typeof value.title === "string" ? value.title.trim() : "";
   const subtitle = typeof value.subtitle === "string" ? value.subtitle.trim() : "";
   if (!title || title.length > 100 || subtitle.length > 200) {
@@ -67,16 +109,23 @@ export async function PUT(request: Request) {
     items.push({ id, time, title: itemTitle, description });
   }
 
+  const functionaries = validateCredits(value.functionaries ?? [], "Functionaries");
+  if (!functionaries.ok) return NextResponse.json({ error: functionaries.error }, { status: 400 });
+  const photography = validateCredits(value.photography ?? [], "Photography");
+  if (!photography.ok) return NextResponse.json({ error: photography.error }, { status: 400 });
+
   const db = getDb();
   const rows = await db`
-    INSERT INTO wedding_program (id, title, subtitle, items)
-    VALUES (1, ${title}, ${subtitle}, ${JSON.stringify(items)}::jsonb)
+    INSERT INTO wedding_program (id, title, subtitle, items, functionaries, photography)
+    VALUES (1, ${title}, ${subtitle}, ${JSON.stringify(items)}::jsonb, ${JSON.stringify(functionaries.credits)}::jsonb, ${JSON.stringify(photography.credits)}::jsonb)
     ON CONFLICT (id) DO UPDATE
     SET title = EXCLUDED.title,
         subtitle = EXCLUDED.subtitle,
         items = EXCLUDED.items,
+        functionaries = EXCLUDED.functionaries,
+        photography = EXCLUDED.photography,
         updated_at = NOW()
-    RETURNING title, subtitle, items
+    RETURNING title, subtitle, items, functionaries, photography
   `;
   return NextResponse.json({ program: readProgram(rows[0] as Record<string, unknown>) });
 }

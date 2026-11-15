@@ -18,13 +18,13 @@ import {
   UserRoundPlus,
   Clock3,
   ListOrdered,
-  Trash2,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import ProgramBooklet from "@/components/ProgramBooklet";
 import type { StaffSession } from "@/lib/auth";
 import { DEFAULT_EVENT_AT, fromEventDateInput, toEventDateInput } from "@/lib/event-time";
-import { DEFAULT_WEDDING_PROGRAM, type ProgramItem, type WeddingProgram } from "@/lib/program";
+import { DEFAULT_WEDDING_PROGRAM, type ProgramItem, type ProgramCreditSection, type WeddingProgram } from "@/lib/program";
 
 type Attendee = {
   id: string;
@@ -301,10 +301,48 @@ export default function Dashboard() {
     }));
   }
 
+  function updateProgramField(field: "title" | "subtitle", value: string) {
+    setProgram((current) => ({ ...current, [field]: value }));
+  }
+
   function addProgramItem() {
-    setProgram((current) => ({
+    setProgram((current) => current.items.length >= 30 ? current : ({
       ...current,
       items: [...current.items, { id: crypto.randomUUID(), time: "", title: "", description: "" }],
+    }));
+  }
+
+  function removeProgramItem(id: string) {
+    setProgram((current) => ({
+      ...current,
+      items: current.items.filter((item) => item.id !== id),
+    }));
+  }
+
+  function updateProgramCredit(
+    section: ProgramCreditSection,
+    id: string,
+    field: "title" | "description",
+    value: string,
+  ) {
+    setProgram((current) => ({
+      ...current,
+      [section]: current[section].map((credit) => credit.id === id ? { ...credit, [field]: value } : credit),
+    }));
+  }
+
+  function addProgramCredit(section: ProgramCreditSection) {
+    setProgram((current) => {
+      const credits = current[section];
+      if (credits.length >= 30) return current;
+      return { ...current, [section]: [...credits, { id: crypto.randomUUID(), title: "", description: "" }] };
+    });
+  }
+
+  function removeProgramCredit(section: ProgramCreditSection, id: string) {
+    setProgram((current) => ({
+      ...current,
+      [section]: current[section].filter((credit) => credit.id !== id),
     }));
   }
 
@@ -486,51 +524,29 @@ export default function Dashboard() {
             <section className="panel program-editor-panel">
               <div className="panel-head">
                 <div>
-                  <h2>Wedding day program</h2>
-                  <p>Edit the schedule guests can view on the public program page.</p>
+                  <h2>Edit the program booklet</h2>
+                  <p>Edit the welcome, event schedule, functionaries, and photography section on the booklet. Changes appear publicly after saving.</p>
                 </div>
                 <a className="button button-outline" href="/program" rel="noreferrer" target="_blank">Preview public page</a>
               </div>
-              <form className="program-editor" onSubmit={saveProgram}>
-                <div className="field">
-                  <label htmlFor="program-title">Page title</label>
-                  <input id="program-title" maxLength={100} onChange={(event) => setProgram({ ...program, title: event.target.value })} required value={program.title} />
+              <form className="program-editor program-inline-editor-form" onSubmit={saveProgram}>
+                <div className="program-editor-booklet">
+                  <ProgramBooklet
+                    eventAt={fromEventDateInput(eventDate) || DEFAULT_EVENT_AT}
+                    editable
+                    onAddItem={addProgramItem}
+                    onAddCredit={addProgramCredit}
+                    onCreditChange={updateProgramCredit}
+                    onFieldChange={updateProgramField}
+                    onItemChange={updateProgramItem}
+                    onRemoveCredit={removeProgramCredit}
+                    onRemoveItem={removeProgramItem}
+                    preview
+                    program={program}
+                  />
                 </div>
-                <div className="field">
-                  <label htmlFor="program-subtitle">Welcome message</label>
-                  <input id="program-subtitle" maxLength={200} onChange={(event) => setProgram({ ...program, subtitle: event.target.value })} value={program.subtitle} />
-                </div>
-                <div className="program-items-heading">
-                  <div><h3>Order of events</h3><p>Entries appear in the same order as listed here.</p></div>
-                  <button className="button button-outline" disabled={program.items.length >= 30} onClick={addProgramItem} type="button"><Plus size={14} /> Add event</button>
-                </div>
-                {program.items.length === 0 && (
-                  <div className="program-empty-editor">No events yet. Add the first item to begin the outline.</div>
-                )}
-                {program.items.map((item, index) => (
-                  <fieldset className="program-item-editor" key={item.id}>
-                    <legend>Event {String(index + 1).padStart(2, "0")}</legend>
-                    <div className="program-item-fields">
-                      <div className="field">
-                        <label htmlFor={`program-time-${item.id}`}>Time</label>
-                        <input id={`program-time-${item.id}`} maxLength={40} onChange={(event) => updateProgramItem(item.id, "time", event.target.value)} placeholder="10:00 AM" required value={item.time} />
-                      </div>
-                      <div className="field">
-                        <label htmlFor={`program-name-${item.id}`}>Event</label>
-                        <input id={`program-name-${item.id}`} maxLength={100} onChange={(event) => updateProgramItem(item.id, "title", event.target.value)} placeholder="Wedding ceremony" required value={item.title} />
-                      </div>
-                      <button aria-label={`Remove event ${index + 1}`} className="program-remove" onClick={() => setProgram({ ...program, items: program.items.filter((entry) => entry.id !== item.id) })} type="button">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                    <div className="field">
-                      <label htmlFor={`program-description-${item.id}`}>Details (optional)</label>
-                      <textarea id={`program-description-${item.id}`} maxLength={500} onChange={(event) => updateProgramItem(item.id, "description", event.target.value)} placeholder="Venue, host, or a short note for guests" rows={2} value={item.description} />
-                    </div>
-                  </fieldset>
-                ))}
                 <div className="program-editor-footer">
-                  <span>{program.items.length} / 30 events</span>
+                  <span>Edits are published when you save.</span>
                   <button className="button button-primary" disabled={busy || program.items.length > 30} type="submit">
                     {busy ? <RefreshCw size={14} /> : <Check size={14} />}
                     {busy ? "Saving…" : "Save program outline"}

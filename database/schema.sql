@@ -42,8 +42,17 @@ CREATE TABLE IF NOT EXISTS wedding_program (
   title TEXT NOT NULL DEFAULT 'Wedding Day Program',
   subtitle TEXT NOT NULL DEFAULT 'A celebration of love, faith, and family.',
   items JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(items) = 'array'),
+  functionaries JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(functionaries) = 'array'),
+  photography JSONB NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(photography) = 'array'),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE wedding_program
+  ADD COLUMN IF NOT EXISTS functionaries JSONB NOT NULL DEFAULT '[]'::jsonb
+    CHECK (jsonb_typeof(functionaries) = 'array');
+ALTER TABLE wedding_program
+  ADD COLUMN IF NOT EXISTS photography JSONB NOT NULL DEFAULT '[]'::jsonb
+    CHECK (jsonb_typeof(photography) = 'array');
 
 INSERT INTO wedding_program (id, title, subtitle, items)
 VALUES (

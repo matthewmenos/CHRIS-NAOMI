@@ -28,7 +28,7 @@ A wedding RSVP and SMS app built with Next.js, TypeScript, Neon Postgres, and mN
 ## Features
 
 - Public RSVP form with name, phone, guest count, and clear SMS consent disclosure.
-- A separate, styled public wedding program page editable by admins from the dashboard. The outline starts with the ceremony details shown on the invitation and can be extended with up to 30 timed events.
+- An invitation-inspired, two-panel public wedding program booklet. Admins edit the welcome, event schedule, functionaries, and photography credits directly in the same layout, with changes published when saved. The editor supports up to 30 events and 30 entries in each credits section.
 - A non-scrolling wedding welcome page with a live days/hours/minutes/seconds countdown. Admins can update the event date and time in the dashboard; the invitation defaults to 21 November 2026 at 10:00 AM Ghana time.
 - Attendee records stored in Neon and queued for an admin to review and send the program SMS (avoids sending paid messages directly from a public form).
 - Staff sign-in with admin and usher roles. Admins can create usher accounts.

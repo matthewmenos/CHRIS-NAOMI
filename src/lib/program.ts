@@ -5,10 +5,20 @@ export type ProgramItem = {
   description: string;
 };
 
+export type ProgramCredit = {
+  id: string;
+  title: string;
+  description: string;
+};
+
+export type ProgramCreditSection = "functionaries" | "photography";
+
 export type WeddingProgram = {
   title: string;
   subtitle: string;
   items: ProgramItem[];
+  functionaries: ProgramCredit[];
+  photography: ProgramCredit[];
 };
 
 export const DEFAULT_WEDDING_PROGRAM: WeddingProgram = {
@@ -20,4 +30,6 @@ export const DEFAULT_WEDDING_PROGRAM: WeddingProgram = {
     title: "Wedding Ceremony",
     description: "The Church of Pentecost, Agona-Fie Assembly, Agona Nkwanta",
   }],
+  functionaries: [],
+  photography: [],
 };
