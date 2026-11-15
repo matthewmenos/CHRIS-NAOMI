@@ -17,8 +17,18 @@ CREATE TABLE IF NOT EXISTS attendees (
     CHECK (sms_status IN ('pending', 'sending', 'sent', 'failed')),
   sms_error TEXT,
   sms_sent_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID REFERENCES staff(id) ON DELETE SET NULL,
+  checked_in_at TIMESTAMPTZ,
+  checked_in_by UUID REFERENCES staff(id) ON DELETE SET NULL
 );
+
+ALTER TABLE attendees
+  ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES staff(id) ON DELETE SET NULL;
+ALTER TABLE attendees
+  ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ;
+ALTER TABLE attendees
+  ADD COLUMN IF NOT EXISTS checked_in_by UUID REFERENCES staff(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS sms_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -65,3 +75,5 @@ ON CONFLICT (id) DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS attendees_created_at_idx ON attendees (created_at DESC);
 CREATE INDEX IF NOT EXISTS attendees_sms_status_idx ON attendees (sms_status);
+CREATE INDEX IF NOT EXISTS attendees_created_by_idx ON attendees (created_by, created_at DESC);
+CREATE INDEX IF NOT EXISTS attendees_checked_in_at_idx ON attendees (checked_in_at DESC);

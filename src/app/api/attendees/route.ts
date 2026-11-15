@@ -8,16 +8,33 @@ export const maxDuration = 60;
 export async function GET() {
   const staff = await getSession();
   if (!staff) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  if (staff.role !== "admin") {
-    return NextResponse.json({ error: "Only an admin can view the guest list." }, { status: 403 });
-  }
   const db = getDb();
   const attendees = await db`
-    SELECT id, name, phone, guest_count, sms_consent, sms_status, sms_error,
-           sms_sent_at, created_at
-    FROM attendees ORDER BY created_at DESC
+    SELECT a.id, a.name, a.phone, a.guest_count, a.sms_status, a.sms_error,
+           a.sms_sent_at, a.created_at, a.created_by, creator.name AS entered_by_name,
+           a.checked_in_at, a.checked_in_by, checker.name AS checked_in_by_name
+    FROM attendees a
+    LEFT JOIN staff creator ON creator.id = a.created_by
+    LEFT JOIN staff checker ON checker.id = a.checked_in_by
+    ORDER BY a.created_at DESC
   `;
-  return NextResponse.json({ attendees });
+  if (staff.role === "admin") return NextResponse.json({ attendees });
+  return NextResponse.json({
+    attendees: attendees.map((attendee) => ({
+      id: attendee.id,
+      name: attendee.name,
+      phone: attendee.phone,
+      guest_count: attendee.guest_count,
+      sms_status: attendee.sms_status,
+      sms_sent_at: attendee.sms_sent_at,
+      created_at: attendee.created_at,
+      created_by: attendee.created_by,
+      entered_by_name: attendee.entered_by_name,
+      checked_in_at: attendee.checked_in_at,
+      checked_in_by: attendee.checked_in_by,
+      checked_in_by_name: attendee.checked_in_by_name,
+    })),
+  });
 }
 
 export async function POST(request: Request) {
@@ -44,15 +61,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Guest count must be between 1 and 10." }, { status: 400 });
   }
   const staff = await getSession();
-  const shouldSendSms = staff?.role === "usher";
+  const usherId = staff?.role === "usher" ? staff.id : null;
+  const shouldSendSms = usherId !== null;
   const db = getDb();
   const templates = shouldSendSms
     ? await db`SELECT body FROM sms_templates ORDER BY updated_at DESC LIMIT 1`
     : [];
   const templateBody = templates[0] ? String(templates[0].body).trim() : "";
   const inserted = await db`
-    INSERT INTO attendees (name, phone, guest_count, sms_consent, sms_status)
-    VALUES (${name}, ${phone}, ${guestCount}, TRUE, ${shouldSendSms ? "sending" : "pending"})
+    INSERT INTO attendees (name, phone, guest_count, sms_consent, sms_status, created_by)
+    VALUES (${name}, ${phone}, ${guestCount}, TRUE, ${shouldSendSms ? "sending" : "pending"}, ${usherId})
     ON CONFLICT (phone) DO NOTHING
     RETURNING id, name, phone, guest_count, sms_status
   `;

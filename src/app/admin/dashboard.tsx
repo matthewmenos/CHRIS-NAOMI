@@ -31,6 +31,11 @@ type Attendee = {
   name: string;
   phone: string;
   guest_count: number;
+  created_by: string | null;
+  entered_by_name: string | null;
+  checked_in_at: string | null;
+  checked_in_by: string | null;
+  checked_in_by_name: string | null;
   sms_status: "pending" | "sending" | "sent" | "failed";
   sms_error: string | null;
   sms_sent_at: string | null;
@@ -64,6 +69,8 @@ export default function Dashboard() {
   const [showUsherPassword, setShowUsherPassword] = useState(false);
   const [program, setProgram] = useState<WeddingProgram>(DEFAULT_WEDDING_PROGRAM);
   const [attendeeForm, setAttendeeForm] = useState({ name: "", phone: "", guestCount: "1" });
+  const [editingAttendeeId, setEditingAttendeeId] = useState<string | null>(null);
+  const [attendeeEditForm, setAttendeeEditForm] = useState({ name: "", phone: "", guestCount: "1" });
 
   const loadAttendees = useCallback(async () => {
     const result = await getJson<{ attendees: Attendee[] }>("/api/attendees");
@@ -92,7 +99,10 @@ export default function Dashboard() {
   }, []);
 
   const refresh = useCallback(async () => {
-    if (staff?.role !== "admin") return;
+    if (staff?.role !== "admin") {
+      await loadAttendees();
+      return;
+    }
     await loadAttendees();
     await Promise.all([loadTemplate(), loadTeam(), loadEventDate(), loadProgram()]);
   }, [loadAttendees, loadEventDate, loadProgram, loadTemplate, loadTeam, staff?.role]);
@@ -113,9 +123,7 @@ export default function Dashboard() {
         if (!result || !active) return;
         setStaff(result.staff);
         const [attendeeResult, templateResult, teamResult, settingsResult, programResult] = await Promise.all([
-          result.staff.role === "admin"
-            ? getJson<{ attendees: Attendee[] }>("/api/attendees")
-            : Promise.resolve({ attendees: [] as Attendee[] }),
+          getJson<{ attendees: Attendee[] }>("/api/attendees"),
           result.staff.role === "admin"
             ? getJson<{ template: SmsTemplate | null }>("/api/templates")
             : Promise.resolve({ template: null as SmsTemplate | null }),
@@ -155,6 +163,12 @@ export default function Dashboard() {
   const totalGuests = attendees.reduce((sum, attendee) => sum + attendee.guest_count, 0);
   const pendingCount = attendees.filter((attendee) => attendee.sms_status === "pending" || attendee.sms_status === "failed").length;
   const sentCount = attendees.filter((attendee) => attendee.sms_status === "sent").length;
+  const usherEntriesToday = attendees
+    .filter((attendee) => attendee.created_by === staff?.id && isToday(attendee.created_at))
+    .reduce((sum, attendee) => sum + attendee.guest_count, 0);
+  const usherCheckInsToday = attendees.filter((attendee) => attendee.checked_in_by === staff?.id && isToday(attendee.checked_in_at)).length;
+  const usherMessagesToday = attendees.filter((attendee) => attendee.created_by === staff?.id && attendee.sms_status === "sent" && isToday(attendee.sms_sent_at)).length;
+  const recentUsherEntries = attendees.filter((attendee) => attendee.created_by === staff?.id).slice(0, 5);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -182,8 +196,79 @@ export default function Dashboard() {
         type: result.smsStatus === "failed" || result.alreadyRegistered ? "error" : "success",
         text: result.message,
       });
+      if (result.saved) {
+        try {
+          await loadAttendees();
+        } catch {
+          setNotice({ type: "error", text: `${result.message} The guest list couldn't refresh; use Refresh to check the saved record.` });
+        }
+      }
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Couldn't save the attendee." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startAttendeeEdit(attendee: Attendee) {
+    setEditingAttendeeId(attendee.id);
+    setAttendeeEditForm({
+      name: attendee.name,
+      phone: attendee.phone,
+      guestCount: String(attendee.guest_count),
+    });
+  }
+
+  async function saveAttendeeCorrection() {
+    if (!editingAttendeeId) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/attendees/update", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingAttendeeId,
+          name: attendeeEditForm.name,
+          phone: attendeeEditForm.phone,
+          guestCount: Number(attendeeEditForm.guestCount),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Couldn't update attendee details.");
+      setEditingAttendeeId(null);
+      setNotice({ type: "success", text: result.message });
+      try {
+        await loadAttendees();
+      } catch {
+        setNotice({ type: "error", text: "The attendee was updated, but the guest list couldn't refresh. Reload to verify the change." });
+      }
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Couldn't update attendee details." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function checkInParty(id: string) {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/attendees/check-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Couldn't check in this guest party.");
+      setNotice({ type: "success", text: result.message });
+      try {
+        await loadAttendees();
+      } catch {
+        setNotice({ type: "error", text: "The party was checked in, but the guest list couldn't refresh. Reload to verify its status." });
+      }
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Couldn't check in this guest party." });
     } finally {
       setBusy(false);
     }
@@ -427,11 +512,23 @@ export default function Dashboard() {
           <header className="topbar">
             <div>
               <div className="eyebrow">Usher workspace</div>
-              <h1 className="serif">Add attendee</h1>
+              <h1 className="serif">Guest check-in</h1>
             </div>
+            <button className="button button-outline" disabled={busy} onClick={() => {
+              setNotice(null);
+              void refresh().catch((error: unknown) => setNotice({
+                type: "error",
+                text: error instanceof Error ? error.message : "Couldn't refresh the guest list.",
+              }));
+            }} type="button"><RefreshCw size={13} /> Refresh</button>
           </header>
           <div className="dashboard-content">
             {notice && <div className={`inline-alert ${notice.type}`} role="status">{notice.type === "error" ? <CircleAlert size={14} style={{ verticalAlign: "middle", marginRight: 7 }} /> : <Check size={14} style={{ verticalAlign: "middle", marginRight: 7 }} />}{notice.text}</div>}
+            <div className="stat-grid usher-stat-grid">
+              <StatCard label="Guests added today" value={usherEntriesToday} sub="Entered by you" icon={<UserRoundPlus size={14} />} />
+              <StatCard label="Parties checked in" value={usherCheckInsToday} sub="Checked in by you today" icon={<Check size={14} />} />
+              <StatCard label="Program SMS sent" value={usherMessagesToday} sub="Sent from your entries today" icon={<MessageSquareText size={14} />} />
+            </div>
             <section className="panel usher-entry-panel">
               <div className="panel-head">
                 <div>
@@ -481,6 +578,130 @@ export default function Dashboard() {
                   {busy ? "Saving & sending…" : "Save & send program SMS"}
                 </button>
               </form>
+            </section>
+            <section className="panel">
+              <div className="panel-head">
+                <div>
+                  <h2>Your recent entries</h2>
+                  <p>Your five most recently registered parties.</p>
+                </div>
+              </div>
+              {recentUsherEntries.length ? (
+                <ul className="usher-recent-list">
+                  {recentUsherEntries.map((attendee) => (
+                    <li key={attendee.id}>
+                      <div>
+                        <strong>{attendee.name}</strong>
+                        <span>{attendee.phone} · {attendee.guest_count} {attendee.guest_count === 1 ? "guest" : "guests"}</span>
+                      </div>
+                      <span className={`status-pill status-${attendee.sms_status}`}>SMS {attendee.sms_status}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="empty-state">Attendees you add will appear here.</div>
+              )}
+            </section>
+            <section className="panel">
+              <div className="panel-head usher-directory-head">
+                <div><h2>Guest directory</h2><p>Search all guests and check in parties. Correcting your entry queues an updated SMS for admin review.</p></div>
+                <div className="attendee-tools">
+                  <div className="search-box">
+                    <Search size={13} />
+                    <input
+                      aria-label="Search all guests by name or phone"
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Search name or phone"
+                      value={search}
+                    />
+                  </div>
+                </div>
+              </div>
+              {filteredAttendees.length ? (
+                <div className="table-wrap">
+                  <table className="usher-directory-table">
+                    <thead><tr><th>Guest</th><th>Phone number</th><th>Party size</th><th>Program SMS</th><th>Check-in</th><th>Actions</th></tr></thead>
+                    <tbody>{filteredAttendees.map((attendee) => {
+                      const editing = editingAttendeeId === attendee.id;
+                      const canEdit = attendee.created_by === staff.id;
+                      return (
+                        <tr key={attendee.id}>
+                          <td>
+                            {editing ? (
+                              <input
+                                aria-label="Correct guest name"
+                                className="usher-inline-input"
+                                maxLength={120}
+                                onChange={(event) => setAttendeeEditForm({ ...attendeeEditForm, name: event.target.value })}
+                                value={attendeeEditForm.name}
+                              />
+                            ) : (
+                              <div className="person-cell"><div className="person-dot">{attendee.name.slice(0, 1).toUpperCase()}</div><strong>{attendee.name}</strong></div>
+                            )}
+                          </td>
+                          <td>
+                            {editing ? (
+                              <input
+                                aria-label="Correct phone number"
+                                className="usher-inline-input"
+                                inputMode="tel"
+                                onChange={(event) => setAttendeeEditForm({ ...attendeeEditForm, phone: event.target.value })}
+                                value={attendeeEditForm.phone}
+                              />
+                            ) : attendee.phone}
+                          </td>
+                          <td>
+                            {editing ? (
+                              <select
+                                aria-label="Correct party size"
+                                className="usher-inline-input"
+                                onChange={(event) => setAttendeeEditForm({ ...attendeeEditForm, guestCount: event.target.value })}
+                                value={attendeeEditForm.guestCount}
+                              >
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((count) => (
+                                  <option key={count} value={count}>{count}</option>
+                                ))}
+                              </select>
+                            ) : `${attendee.guest_count} ${attendee.guest_count === 1 ? "guest" : "guests"}`}
+                          </td>
+                          <td><span className={`status-pill status-${attendee.sms_status}`}>{attendee.sms_status}</span></td>
+                          <td>
+                            {attendee.checked_in_at ? (
+                              <span className="usher-checked-in" title={attendee.checked_in_by_name ? `Checked in by ${attendee.checked_in_by_name}` : undefined}>
+                                Checked in · {new Date(attendee.checked_in_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                              </span>
+                            ) : (
+                              <button className="button button-outline usher-row-button" disabled={busy} onClick={() => void checkInParty(attendee.id)} type="button">
+                                Check in party
+                              </button>
+                            )}
+                          </td>
+                          <td>
+                            {editing ? (
+                              <div className="usher-row-actions">
+                                <button className="button button-primary usher-row-button" disabled={busy} onClick={() => void saveAttendeeCorrection()} type="button">
+                                  Save
+                                </button>
+                                <button className="usher-text-button" disabled={busy} onClick={() => setEditingAttendeeId(null)} type="button">
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : canEdit ? (
+                              <button className="usher-text-button" disabled={busy} onClick={() => startAttendeeEdit(attendee)} type="button">
+                                Correct details
+                              </button>
+                            ) : (
+                              <span className="muted">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="empty-state"><Users size={21} style={{ display: "block", margin: "0 auto 10px", opacity: .45 }} />No guests match your search.</div>
+              )}
             </section>
           </div>
         </section>
@@ -711,6 +932,10 @@ export default function Dashboard() {
 
 function StatCard({ label, value, sub, icon }: { label: string; value: number; sub: string; icon: React.ReactNode }) {
   return <article className="stat-card"><div className="stat-head"><span>{label}</span><div className="stat-icon">{icon}</div></div><div className="stat-value">{value}</div><div className="stat-sub">{sub}</div></article>;
+}
+
+function isToday(value: string | null) {
+  return value !== null && new Date(value).toDateString() === new Date().toDateString();
 }
 
 function AttendeeTable({ attendees }: { attendees: Attendee[] }) {
