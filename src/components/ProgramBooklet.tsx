@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Clock3, MapPin, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, Clock3, GripVertical, MapPin, Plus, Trash2 } from "lucide-react";
+import { useState, type DragEvent as ReactDragEvent } from "react";
 import { EVENT_TIME_ZONE } from "@/lib/event-time";
 import type { ProgramCredit, ProgramCreditSection, ProgramItem, WeddingProgram } from "@/lib/program";
 
@@ -16,6 +17,7 @@ type ProgramBookletProps = {
   onItemChange?: (id: string, field: keyof Omit<ProgramItem, "id">, value: string) => void;
   onAddItem?: () => void;
   onRemoveItem?: (id: string) => void;
+  onMoveItem?: (fromIndex: number, toIndex: number) => void;
   onCreditChange?: (section: ProgramCreditSection, id: string, field: "title" | "description", value: string) => void;
   onAddCredit?: (section: ProgramCreditSection) => void;
   onRemoveCredit?: (section: ProgramCreditSection, id: string) => void;
@@ -149,10 +151,13 @@ export default function ProgramBooklet({
   onItemChange,
   onAddItem,
   onRemoveItem,
+  onMoveItem,
   onCreditChange,
   onAddCredit,
   onRemoveCredit,
 }: ProgramBookletProps) {
+  const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const eventDate = new Intl.DateTimeFormat("en", {
     weekday: "long",
     day: "numeric",
@@ -166,6 +171,23 @@ export default function ProgramBooklet({
     timeZone: EVENT_TIME_ZONE,
   }).format(new Date(eventAt));
   const agendaHeadingId = preview ? "program-preview-title" : "program-title";
+
+  function startDraggingItem(event: ReactDragEvent<HTMLButtonElement>, index: number) {
+    setDraggedItemIndex(index);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(index));
+  }
+
+  function dropItem(event: ReactDragEvent<HTMLLIElement>, targetIndex: number) {
+    event.preventDefault();
+    const dataIndex = event.dataTransfer.getData("text/plain");
+    const sourceIndex = draggedItemIndex ?? (dataIndex ? Number(dataIndex) : Number.NaN);
+    if (Number.isInteger(sourceIndex) && sourceIndex >= 0 && sourceIndex < program.items.length) {
+      onMoveItem?.(sourceIndex, targetIndex);
+    }
+    setDraggedItemIndex(null);
+    setDropTargetIndex(null);
+  }
 
   return (
     <div className={`program-page${preview ? " program-page-preview" : ""}`}>
@@ -235,17 +257,20 @@ export default function ProgramBooklet({
           <div className="program-ornament-divider agenda-divider" aria-hidden="true"><span>✦</span></div>
           <h2 id={agendaHeadingId} className="agenda-heading">The order of celebration</h2>
           {editable && (
-            <div className="program-inline-actions">
-              <span>{program.items.length} / 30 events</span>
-              <button
-                className="program-add-inline"
-                disabled={program.items.length >= 30}
-                onClick={onAddItem}
-                type="button"
-              >
-                <Plus size={12} /> Add event
-              </button>
-            </div>
+            <>
+              <div className="program-inline-actions">
+                <span>{program.items.length} / 30 events</span>
+                <button
+                  className="program-add-inline"
+                  disabled={program.items.length >= 30}
+                  onClick={onAddItem}
+                  type="button"
+                >
+                  <Plus size={12} /> Add event
+                </button>
+              </div>
+              {program.items.length > 1 && <p className="program-reorder-hint">Drag the grip to reorder, or use the arrow buttons.</p>}
+            </>
           )}
 
           {loading ? (
@@ -257,11 +282,62 @@ export default function ProgramBooklet({
               {editable ? "Add an event to start the wedding day outline." : <>The wedding day program is being prepared.<br />Please check back soon.</>}
             </div>
           ) : (
-            <ol className="program-list">
+            <ol className={`program-list${editable ? " program-list-editable" : ""}`}>
               {program.items.map((item, index) => (
-                <li className={`public-program-item${editable ? " public-program-item-editable" : ""}`} key={item.id}>
+                <li
+                  className={`public-program-item${editable ? " public-program-item-editable" : ""}${draggedItemIndex === index ? " program-item-dragging" : ""}${dropTargetIndex === index ? " program-item-drop-target" : ""}`}
+                  key={item.id}
+                  onDragOver={editable ? (event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    setDropTargetIndex(index);
+                  } : undefined}
+                  onDrop={editable ? (event) => dropItem(event, index) : undefined}
+                >
                   {editable ? (
                     <>
+                      <div className="program-item-toolbar" aria-label={`Reorder event ${index + 1}`}>
+                        <button
+                          aria-label={`Drag event ${index + 1} to reorder`}
+                          className="program-item-drag-handle"
+                          draggable
+                          onDragEnd={() => {
+                            setDraggedItemIndex(null);
+                            setDropTargetIndex(null);
+                          }}
+                          onDragStart={(event) => startDraggingItem(event, index)}
+                          title="Drag to reorder"
+                          type="button"
+                        >
+                          <GripVertical size={13} />
+                        </button>
+                        <button
+                          aria-label={`Move event ${index + 1} up`}
+                          className="program-item-order-button"
+                          disabled={index === 0}
+                          onClick={() => onMoveItem?.(index, index - 1)}
+                          type="button"
+                        >
+                          <ArrowUp size={12} />
+                        </button>
+                        <button
+                          aria-label={`Move event ${index + 1} down`}
+                          className="program-item-order-button"
+                          disabled={index === program.items.length - 1}
+                          onClick={() => onMoveItem?.(index, index + 1)}
+                          type="button"
+                        >
+                          <ArrowDown size={12} />
+                        </button>
+                        <button
+                          aria-label={`Remove event ${index + 1}`}
+                          className="program-inline-remove"
+                          onClick={() => onRemoveItem?.(item.id)}
+                          type="button"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                       <input
                         aria-label={`Event ${index + 1} title`}
                         className="public-program-item-title program-inline-field"
@@ -289,14 +365,6 @@ export default function ProgramBooklet({
                         rows={2}
                         value={item.description}
                       />
-                      <button
-                        aria-label={`Remove event ${index + 1}`}
-                        className="program-inline-remove"
-                        onClick={() => onRemoveItem?.(item.id)}
-                        type="button"
-                      >
-                        <Trash2 size={12} />
-                      </button>
                     </>
                   ) : (
                     <>

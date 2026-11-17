@@ -436,6 +436,24 @@ export default function Dashboard() {
     }));
   }
 
+  function moveProgramItem(fromIndex: number, toIndex: number) {
+    setProgram((current) => {
+      if (
+        fromIndex < 0 ||
+        fromIndex >= current.items.length ||
+        toIndex < 0 ||
+        toIndex >= current.items.length ||
+        fromIndex === toIndex
+      ) {
+        return current;
+      }
+      const items = [...current.items];
+      const [moved] = items.splice(fromIndex, 1);
+      items.splice(toIndex, 0, moved);
+      return { ...current, items };
+    });
+  }
+
   function updateProgramCredit(
     section: ProgramCreditSection,
     id: string,
@@ -873,6 +891,7 @@ export default function Dashboard() {
                     onCreditChange={updateProgramCredit}
                     onFieldChange={updateProgramField}
                     onItemChange={updateProgramItem}
+                    onMoveItem={moveProgramItem}
                     onRemoveCredit={removeProgramCredit}
                     onRemoveItem={removeProgramItem}
                     preview

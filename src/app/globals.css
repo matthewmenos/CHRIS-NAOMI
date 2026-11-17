@@ -235,7 +235,17 @@ td strong { color: var(--ink); font-size: 11px; }
 .program-inline-field:focus { border: 1px solid var(--gold); outline: 0; background: #fffdf7; box-shadow: 0 0 0 2px #b48d6126; }
 .program-inline-welcome { width: min(100%, 340px); min-height: 52px; margin: 13px auto 0; resize: vertical; font-family: "Playfair Display", Georgia, serif; font-size: 12px; font-style: italic; line-height: 1.7; }
 .program-inline-title { font-family: "Segoe Script", "Brush Script MT", cursive; font-style: italic; font-weight: 400; line-height: 1.15; }
-.public-program-item-editable { position: relative; padding: 5px 27px; border-bottom: 1px dashed #e1d3b8; }
+.public-program-item-editable { position: relative; padding: 7px 27px; border-bottom: 1px dashed #e1d3b8; transition: background-color .15s ease, opacity .15s ease; }
+.public-program-item-editable.program-item-dragging { opacity: .42; }
+.public-program-item-editable.program-item-drop-target { border-top: 2px solid var(--gold); background: #b48d610c; }
+.program-item-toolbar { display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 4px; }
+.program-item-drag-handle, .program-item-order-button { display: inline-grid; width: 23px; height: 23px; place-items: center; border: 1px solid #d8c8a9; border-radius: 50%; color: #806b48; background: #fffdf7; }
+.program-item-drag-handle { cursor: grab; }
+.program-item-drag-handle:active { cursor: grabbing; }
+.program-item-order-button:hover:not(:disabled), .program-item-drag-handle:hover { border-color: var(--gold); color: var(--navy); background: #f5efdf; }
+.program-item-order-button:disabled { opacity: .35; cursor: not-allowed; }
+.program-item-toolbar .program-inline-remove { position: static; width: 23px; height: 23px; border: 1px solid #ead3cc; }
+.program-reorder-hint { margin: 6px 0 0; color: #81755f; font-size: 9px; font-style: italic; text-align: center; }
 .public-program-item-title { width: 100%; font-family: "Playfair Display", Georgia, serif; font-size: 13px; font-style: italic; font-weight: 700; line-height: 1.35; }
 .program-inline-field.public-program-time { width: min(100%, 190px); margin: 3px auto 0; font-family: "Playfair Display", Georgia, serif; font-size: 11px; font-style: italic; }
 .program-inline-description { width: 100%; min-height: 42px; margin: 3px auto 0; resize: vertical; font-family: "Playfair Display", Georgia, serif; font-size: 11px; font-style: italic; line-height: 1.5; }
