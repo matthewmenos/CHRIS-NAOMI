@@ -40,8 +40,12 @@ CREATE TABLE IF NOT EXISTS sms_templates (
 CREATE TABLE IF NOT EXISTS wedding_settings (
   id SMALLINT PRIMARY KEY CHECK (id = 1),
   event_at TIMESTAMPTZ NOT NULL,
+  show_program BOOLEAN NOT NULL DEFAULT FALSE,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE wedding_settings
+  ADD COLUMN IF NOT EXISTS show_program BOOLEAN NOT NULL DEFAULT FALSE;
 
 INSERT INTO wedding_settings (id, event_at)
 VALUES (1, '2026-11-21 10:00:00+00')

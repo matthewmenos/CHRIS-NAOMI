@@ -11,6 +11,7 @@ type ProgramBookletProps = {
   program: WeddingProgram;
   loading?: boolean;
   error?: string;
+  eventsVisible?: boolean;
   preview?: boolean;
   editable?: boolean;
   onFieldChange?: (field: "title" | "subtitle", value: string) => void;
@@ -145,6 +146,7 @@ export default function ProgramBooklet({
   program,
   loading = false,
   error = "",
+  eventsVisible = true,
   preview = false,
   editable = false,
   onFieldChange,
@@ -277,6 +279,10 @@ export default function ProgramBooklet({
             <div className="program-state">Preparing the day’s program…</div>
           ) : error ? (
             <div className="program-state program-error" role="status">{error}</div>
+          ) : !editable && !eventsVisible ? (
+            <div className="program-state">
+              The wedding day program will be revealed when the countdown ends.<br />Please check back then.
+            </div>
           ) : program.items.length === 0 ? (
             <div className="program-state">
               {editable ? "Add an event to start the wedding day outline." : <>The wedding day program is being prepared.<br />Please check back soon.</>}

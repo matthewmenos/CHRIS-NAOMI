@@ -65,6 +65,7 @@ export default function Dashboard() {
   const [templateName, setTemplateName] = useState("");
   const [templateBody, setTemplateBody] = useState("");
   const [eventDate, setEventDate] = useState(toEventDateInput(DEFAULT_EVENT_AT));
+  const [showProgramEarly, setShowProgramEarly] = useState(false);
   const [usher, setUsher] = useState({ name: "", email: "", password: "" });
   const [showUsherPassword, setShowUsherPassword] = useState(false);
   const [program, setProgram] = useState<WeddingProgram>(DEFAULT_WEDDING_PROGRAM);
@@ -89,8 +90,9 @@ export default function Dashboard() {
   }, []);
 
   const loadEventDate = useCallback(async () => {
-    const result = await getJson<{ eventAt: string }>("/api/settings");
+    const result = await getJson<{ eventAt: string; showProgram: boolean }>("/api/settings");
     setEventDate(toEventDateInput(result.eventAt));
+    setShowProgramEarly(result.showProgram);
   }, []);
 
   const loadProgram = useCallback(async () => {
@@ -131,8 +133,8 @@ export default function Dashboard() {
             ? getJson<{ team: TeamMember[] }>("/api/staff")
             : Promise.resolve({ team: [] as TeamMember[] }),
           result.staff.role === "admin"
-            ? getJson<{ eventAt: string }>("/api/settings")
-            : Promise.resolve({ eventAt: DEFAULT_EVENT_AT }),
+            ? getJson<{ eventAt: string; showProgram: boolean }>("/api/settings")
+            : Promise.resolve({ eventAt: DEFAULT_EVENT_AT, showProgram: false }),
           getJson<{ program: WeddingProgram }>("/api/program"),
         ]);
         if (!active) return;
@@ -141,6 +143,7 @@ export default function Dashboard() {
         setTemplateBody(templateResult.template?.body ?? "");
         setTeam(teamResult.team);
         setEventDate(toEventDateInput(settingsResult.eventAt));
+        setShowProgramEarly(settingsResult.showProgram);
         setProgram(programResult.program);
       })
       .catch((error: unknown) => {
@@ -377,12 +380,13 @@ export default function Dashboard() {
       const response = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventAt }),
+        body: JSON.stringify({ eventAt, showProgram: showProgramEarly }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Couldn't save the wedding date.");
       setEventDate(toEventDateInput(result.eventAt));
-      setNotice({ type: "success", text: "Wedding date and time saved." });
+      setShowProgramEarly(result.showProgram);
+      setNotice({ type: "success", text: "Wedding date and program visibility saved." });
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Couldn't save the wedding date." });
     } finally {
@@ -848,7 +852,7 @@ export default function Dashboard() {
               <div className="panel-head">
                 <div>
                   <h2>Wedding date and time</h2>
-                  <p>This controls the public countdown. Time is shown in Ghana time (GMT).</p>
+                  <p>Set the countdown and choose when the public can see the event schedule.</p>
                 </div>
                 <span className="status-pill status-sent"><Clock3 size={11} style={{ marginRight: 5 }} />Public countdown</span>
               </div>
@@ -863,6 +867,18 @@ export default function Dashboard() {
                     value={eventDate}
                   />
                 </div>
+                <label className="program-visibility-option" htmlFor="show-program-early">
+                  <input
+                    checked={showProgramEarly}
+                    id="show-program-early"
+                    onChange={(event) => setShowProgramEarly(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    <strong>Display the program before the wedding</strong>
+                    <small>When off, the public event schedule is revealed automatically when the countdown ends.</small>
+                  </span>
+                </label>
                 <p>The countdown updates automatically on the welcome page. The current invitation date is Saturday, 21 November 2026 at 10:00 AM.</p>
                 <button className="button button-primary" disabled={busy} type="submit">
                   {busy ? <RefreshCw size={14} /> : <Check size={14} />}

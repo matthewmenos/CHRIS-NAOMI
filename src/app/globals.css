@@ -195,6 +195,11 @@ td strong { color: var(--ink); font-size: 11px; }
 .event-date-form input { max-width: 100%; }
 .event-date-form > p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
 .event-date-form > .button { justify-self: start; }
+.program-visibility-option { display: flex; align-items: flex-start; gap: 10px; padding: 13px; border: 1px solid #e8e1d8; border-radius: 7px; background: #fbfaf8; cursor: pointer; }
+.program-visibility-option input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--navy); }
+.program-visibility-option span { display: grid; gap: 4px; }
+.program-visibility-option strong { color: var(--ink); font-size: 11px; }
+.program-visibility-option small { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .program-editor-panel { max-width: 1100px; border-color: #d7c49f; }
 .program-editor-panel > .panel-head { border-bottom-color: #e8dcc5; background: #fbf8f2; }
 .program-editor-booklet { overflow: hidden; border: 1px solid #d7c49f; border-radius: 8px; background: #eee9df; }

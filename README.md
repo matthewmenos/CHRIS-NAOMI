@@ -29,6 +29,7 @@ A wedding RSVP and SMS app built with Next.js, TypeScript, Neon Postgres, and mN
 
 - Public RSVP form with name, phone, guest count, and clear SMS consent disclosure.
 - An invitation-inspired, two-panel public wedding program booklet. Admins edit the welcome, event schedule, functionaries, and photography credits directly in the same layout, with changes published when saved. Events can be dragged or moved with accessible arrow controls; the editor supports up to 30 events and 30 entries in each credits section.
+- Public event schedule items stay hidden until the wedding countdown ends unless an admin enables early program display in the event-date settings. The public program API enforces the same visibility rule.
 - A non-scrolling wedding welcome page with a live days/hours/minutes/seconds countdown. Admins can update the event date and time in the dashboard; the invitation defaults to 21 November 2026 at 10:00 AM Ghana time.
 - Public RSVP records are stored in Neon for admin review and later SMS sending. Usher accounts get a focused attendee-entry screen; each new attendee they save is sent the current program template immediately by SMS.
 - Staff sign-in with admin and usher roles. Admins can create usher accounts and manage settings. Ushers can search the guest directory, check in whole parties, correct their own entries, and view their daily activity.
@@ -39,4 +40,4 @@ Templates support `{name}` and `{guests}` placeholders. Add the actual ceremony 
 
 ## Deploy to Vercel
 
-Push this repository to GitHub, import it into Vercel, and add the environment variables from `.env.example` in the project settings. With your production `DATABASE_URL`, run `npm run db:deploy` and `npm run seed:admin` locally. Re-run `npm run db:deploy` after pulling schema changes for the countdown, wedding program, or attendee tracking. Never commit `.env.local` or share provider credentials.
+Push this repository to GitHub, import it into Vercel, and add the environment variables from `.env.example` in the project settings. With your production `DATABASE_URL`, run `npm run db:deploy` and `npm run seed:admin` locally. Re-run `npm run db:deploy` after pulling schema changes for the countdown, program visibility, wedding program, or attendee tracking. Never commit `.env.local` or share provider credentials.

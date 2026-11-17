@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { DEFAULT_EVENT_AT } from "@/lib/event-time";
 import { DEFAULT_WEDDING_PROGRAM, type ProgramCredit, type ProgramItem, type WeddingProgram } from "@/lib/program";
 
 function readProgram(row: Record<string, unknown> | undefined): WeddingProgram {
@@ -52,15 +53,27 @@ function validateCredits(value: unknown, section: string): CreditListResult {
 }
 
 export async function GET() {
+  const staff = await getSession();
   let db;
   try {
     db = getDb();
   } catch (_error) {
     return NextResponse.json({ error: "Database connection failed." }, { status: 500 });
   }
-  const rows = await db`SELECT title, subtitle, items, functionaries, photography FROM wedding_program WHERE id = 1`;
+  const [rows, settings] = await Promise.all([
+    db`SELECT title, subtitle, items, functionaries, photography FROM wedding_program WHERE id = 1`,
+    db`SELECT event_at, show_program FROM wedding_settings WHERE id = 1`,
+  ]);
+  const eventAt = settings[0] ? new Date(String(settings[0].event_at)) : new Date(DEFAULT_EVENT_AT);
+  const eventsVisible = staff?.role === "admin"
+    || Boolean(settings[0]?.show_program)
+    || eventAt.getTime() <= Date.now();
   try {
-    return NextResponse.json({ program: readProgram(rows[0] as Record<string, unknown> | undefined) });
+    const program = readProgram(rows[0] as Record<string, unknown> | undefined);
+    return NextResponse.json({
+      program: eventsVisible ? program : { ...program, items: [] },
+      eventsVisible,
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ error: "Invalid wedding program data." }, { status: 500 });
   }
