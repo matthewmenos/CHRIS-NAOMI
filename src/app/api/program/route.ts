@@ -52,9 +52,18 @@ function validateCredits(value: unknown, section: string): CreditListResult {
 }
 
 export async function GET() {
-  const db = getDb();
+  let db;
+  try {
+    db = getDb();
+  } catch (_error) {
+    return NextResponse.json({ error: "Database connection failed." }, { status: 500 });
+  }
   const rows = await db`SELECT title, subtitle, items, functionaries, photography FROM wedding_program WHERE id = 1`;
-  return NextResponse.json({ program: readProgram(rows[0] as Record<string, unknown> | undefined) });
+  try {
+    return NextResponse.json({ program: readProgram(rows[0] as Record<string, unknown> | undefined) });
+  } catch (error) {
+    return NextResponse.json({ error: "Invalid wedding program data." }, { status: 500 });
+  }
 }
 
 export async function PUT(request: Request) {
@@ -114,7 +123,12 @@ export async function PUT(request: Request) {
   const photography = validateCredits(value.photography ?? [], "Photography");
   if (!photography.ok) return NextResponse.json({ error: photography.error }, { status: 400 });
 
-  const db = getDb();
+  let db;
+  try {
+    db = getDb();
+  } catch (_error) {
+    return NextResponse.json({ error: "Database connection failed." }, { status: 500 });
+  }
   const rows = await db`
     INSERT INTO wedding_program (id, title, subtitle, items, functionaries, photography)
     VALUES (1, ${title}, ${subtitle}, ${JSON.stringify(items)}::jsonb, ${JSON.stringify(functionaries.credits)}::jsonb, ${JSON.stringify(photography.credits)}::jsonb)
@@ -127,5 +141,9 @@ export async function PUT(request: Request) {
         updated_at = NOW()
     RETURNING title, subtitle, items, functionaries, photography
   `;
-  return NextResponse.json({ program: readProgram(rows[0] as Record<string, unknown>) });
+  try {
+    return NextResponse.json({ program: readProgram(rows[0] as Record<string, unknown>) });
+  } catch (error) {
+    return NextResponse.json({ error: "Invalid wedding program data." }, { status: 500 });
+  }
 }

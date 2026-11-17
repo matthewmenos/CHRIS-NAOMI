@@ -8,7 +8,12 @@ export const maxDuration = 60;
 export async function GET() {
   const staff = await getSession();
   if (!staff) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  const db = getDb();
+  let db;
+  try {
+    db = getDb();
+  } catch (_error) {
+    return NextResponse.json({ error: "Database connection failed." }, { status: 500 });
+  }
   const attendees = await db`
     SELECT a.id, a.name, a.phone, a.guest_count, a.sms_status, a.sms_error,
            a.sms_sent_at, a.created_at, a.created_by, creator.name AS entered_by_name,
@@ -63,17 +68,27 @@ export async function POST(request: Request) {
   const staff = await getSession();
   const usherId = staff?.role === "usher" ? staff.id : null;
   const shouldSendSms = usherId !== null;
-  const db = getDb();
+  let db;
+  try {
+    db = getDb();
+  } catch (_error) {
+    return NextResponse.json({ error: "Database connection failed." }, { status: 500 });
+  }
   const templates = shouldSendSms
     ? await db`SELECT body FROM sms_templates ORDER BY updated_at DESC LIMIT 1`
     : [];
   const templateBody = templates[0] ? String(templates[0].body).trim() : "";
-  const inserted = await db`
-    INSERT INTO attendees (name, phone, guest_count, sms_consent, sms_status, created_by)
-    VALUES (${name}, ${phone}, ${guestCount}, TRUE, ${shouldSendSms ? "sending" : "pending"}, ${usherId})
-    ON CONFLICT (phone) DO NOTHING
-    RETURNING id, name, phone, guest_count, sms_status
-  `;
+  let inserted;
+  try {
+    inserted = await db`
+      INSERT INTO attendees (name, phone, guest_count, sms_consent, sms_status, created_by)
+      VALUES (${name}, ${phone}, ${guestCount}, TRUE, ${shouldSendSms ? "sending" : "pending"}, ${usherId})
+      ON CONFLICT (phone) DO NOTHING
+      RETURNING id, name, phone, guest_count, sms_status
+    `;
+  } catch (_error) {
+    return NextResponse.json({ error: "Failed to save attendee." }, { status: 500 });
+  }
   const attendee = inserted[0] as
     | { id: string; name: string; phone: string; guest_count: number; sms_status: string }
     | undefined;
@@ -99,16 +114,20 @@ export async function POST(request: Request) {
           ? sentNumbers.includes(toMnotifyPhone(attendee.phone))
           : result.summary?.total_sent === 1;
         if (confirmed) {
-          await db`
-            UPDATE attendees
-            SET sms_status = 'sent', sms_sent_at = NOW(), sms_error = NULL
-            WHERE id = ${attendee.id}
-          `;
-          return NextResponse.json({
-            saved: true,
-            message: "Attendee saved and the program SMS was sent.",
-            smsStatus: "sent",
-          }, { status: 201 });
+          try {
+            await db`
+              UPDATE attendees
+              SET sms_status = 'sent', sms_sent_at = NOW(), sms_error = NULL
+              WHERE id = ${attendee.id}
+            `;
+            return NextResponse.json({
+              saved: true,
+              message: "Attendee saved and the program SMS was sent.",
+              smsStatus: "sent",
+            }, { status: 201 });
+          } catch (error) {
+            return NextResponse.json({ error: "Failed to update SMS status." }, { status: 500 });
+          }
         }
         smsError = "mNotify did not confirm this number as sent.";
       } catch (error) {
@@ -116,11 +135,15 @@ export async function POST(request: Request) {
       }
     }
 
-    await db`
-      UPDATE attendees
-      SET sms_status = 'failed', sms_error = ${smsError.slice(0, 500)}
-      WHERE id = ${attendee.id}
-    `;
+    try {
+      await db`
+        UPDATE attendees
+        SET sms_status = 'failed', sms_error = ${smsError.slice(0, 500)}
+        WHERE id = ${attendee.id}
+      `;
+    } catch (error) {
+      return NextResponse.json({ error: "Failed to update SMS status." }, { status: 500 });
+    }
     return NextResponse.json({
       saved: true,
       message: `Attendee saved, but the SMS could not be sent: ${smsError}`,
